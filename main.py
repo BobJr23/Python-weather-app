@@ -1,10 +1,13 @@
 import PySimpleGUI as sg
 import requests
-from dotenv import load_dotenv
-import os
+from weather import (
+    get_weather,
+    get_forecast,
+    apiKey,
+    get_saved_locations,
+    save_location,
+)
 
-load_dotenv()
-apiKey = os.getenv("API_KEY")
 sg.Window._move_all_windows = True
 
 
@@ -23,13 +26,10 @@ def title_bar(title, text_color, background_color):
         sg.Col(
             [
                 [
-                    sg.T(
-                        "_",
-                        text_color=tc,
+                    sg.Text(
+                        "",
+                        size=(68, 1),
                         background_color=bc,
-                        enable_events=True,
-                        font=font,
-                        key="-MINIMIZE-",
                     ),
                     sg.Text(
                         "❎",
@@ -53,41 +53,6 @@ def title_bar(title, text_color, background_color):
 ###
 
 
-def get_weather(location):
-    response = requests.get(
-        f"http://api.weatherapi.com/v1/current.json?key={apiKey}&q={location}"
-    )
-    if response.status_code == 200:
-        weather_data = response.json()
-        weather_info = (
-            f"Location: {weather_data['location']['name']}, {weather_data['location']['country']}\n"
-            f"Temperature: {weather_data['current']['temp_c']}°C\n"
-            f"Condition: {weather_data['current']['condition']['text']}"
-        )
-        return weather_info
-    else:
-        return "Error fetching weather stuff"
-
-
-def get_forecast(location):
-    response = requests.get(
-        f"http://api.weatherapi.com/v1/forecast.json?key={apiKey}&q={location}&days=3"
-    )
-    if response.status_code == 200:
-        forecast_data = response.json()
-        forecast_info = f"Location: {forecast_data['location']['name']}, {forecast_data['location']['country']}\n"
-        for day in forecast_data["forecast"]["forecastday"]:
-            forecast_info += (
-                f"Date: {day['date']}\n"
-                f"Max Temp: {day['day']['maxtemp_c']}°C\n"
-                f"Min Temp: {day['day']['mintemp_c']}°C\n"
-                f"Condition: {day['day']['condition']['text']}\n\n"
-            )
-        return forecast_info
-    else:
-        return "Error fetching forecast stuff"
-
-
 def get_location():
     response = requests.get(
         f"http://ip-api.com/json/?fields=city,query,regionName,country"
@@ -101,7 +66,7 @@ def get_location():
 
 bg = [
     [
-        sg.Image(filename="cloud.png", key="-IMAGE-"),
+        sg.Image(filename="sun.png", key="-IMAGE-", size=(700, 450)),
     ],
 ]
 window_background = sg.Window(
@@ -140,23 +105,34 @@ layout = [
         sg.Text("City", background_color="#666666", text_color="white"),
         sg.InputText(get_location(), key="-LOCATION-"),
     ],
-    [sg.Radio("Fahrenheit", "TEMP", default=True), sg.Radio("Celsius", "TEMP")],
-    [sg.Button("Get Weather"), sg.Button("Get 3-Day Forecast")],
     [
-        sg.Text(
-            "Enter a city and click the button to get the weather.",
-            background_color="#666666",
-            text_color="white",
+        sg.Radio("Fahrenheit", "TEMP", default=True, enable_events=True),
+        sg.Radio("Celsius", "TEMP", enable_events=True),
+    ],
+    [
+        sg.Button("Get Weather"),
+        sg.Button("Get Forecast"),
+        sg.InputText("3", tooltip="Number of days", key="DAYS", size=(3, 1)),
+    ],
+    [
+        sg.Multiline(
+            size=(50, 8),
+            key="-WEATHER-",
+            no_scrollbar=True,
+            expand_x=True,
+            # background_color=sg.theme_background_color(),
+            # text_color="white",
         )
     ],
-    [sg.Text("Favorites", background_color="#666666", text_color="white")],
-    [sg.Multiline(size=(50, 8), key="-WEATHER-", no_scrollbar=True)],
     [
         sg.Listbox(
-            values=["boston ma", "new york ny"],
+            values=get_saved_locations(),
             size=(30, 4),
             key="FAVORITES",
             enable_events=True,
+            expand_x=True,
+            sbar_width=1,
+            sbar_arrow_width=1,
         )
     ],
     [
@@ -182,21 +158,35 @@ window["-C-"].expand(True, False, False)
 def main():
     event, values = window.read(timeout=0)
     window["-WEATHER-"].update(get_weather(values["-LOCATION-"]))
+    measure = "f"
     while True:
         event, values = window.read()
         print(event, values)
         if event == "Exit" or event == sg.WIN_CLOSED:
             break
+        if event == 0:
+            measure = "f"
+        if event == 1:
+            measure = "c"
         if event == "Get Weather":
             location = values["-LOCATION-"]
-
-            result = get_weather(location)
+            result = get_weather(location, measure)
+            window["-WEATHER-"].update(result)
+        if event == "Get Forecast":
+            location = values["-LOCATION-"]
+            result = get_forecast(location, measure, values["DAYS"])
             window["-WEATHER-"].update(result)
         if event == "FAVORITES":
             window["-WEATHER-"].update(get_weather(values["FAVORITES"][0]))
+            window["-LOCATION-"].update(values["FAVORITES"][0])
         if event == "SHOWKEY":
             print(window["SHOWKEY"].get())
             window["API_KEY"].update(password_char="")
+        if event == "SAVELOCATION":
+            save_location(values["-LOCATION-"])
+            window["FAVORITES"].update(get_saved_locations())
+        if event == "LOAD":
+            window["FAVORITES"].update(get_saved_locations())
 
     window.close()
 
