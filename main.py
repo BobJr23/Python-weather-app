@@ -5,6 +5,52 @@ import os
 
 load_dotenv()
 apiKey = os.getenv("API_KEY")
+sg.Window._move_all_windows = True
+
+
+# FROM PYSIMPLEGUI DOCS
+def title_bar(title, text_color, background_color):
+    bc = background_color
+    tc = text_color
+    font = "Helvetica 12"
+
+    return [
+        sg.Col(
+            [[sg.T(title, text_color=tc, background_color=bc, font=font, grab=True)]],
+            pad=(0, 0),
+            background_color=bc,
+        ),
+        sg.Col(
+            [
+                [
+                    sg.T(
+                        "_",
+                        text_color=tc,
+                        background_color=bc,
+                        enable_events=True,
+                        font=font,
+                        key="-MINIMIZE-",
+                    ),
+                    sg.Text(
+                        "❎",
+                        text_color=tc,
+                        background_color=bc,
+                        font=font,
+                        enable_events=True,
+                        key="Exit",
+                    ),
+                ]
+            ],
+            element_justification="r",
+            key="-C-",
+            grab=True,
+            pad=(0, 0),
+            background_color=bc,
+        ),
+    ]
+
+
+###
 
 
 def get_weather(location):
@@ -53,7 +99,24 @@ def get_location():
         return "Error fetching location stuff"
 
 
+bg = [
+    [
+        sg.Image(filename="cloud.png", key="-IMAGE-"),
+    ],
+]
+window_background = sg.Window(
+    "Background",
+    bg,
+    no_titlebar=True,
+    finalize=True,
+    margins=(0, 0),
+    element_padding=(0, 0),
+    grab_anywhere=True,
+)
+
+
 layout = [
+    [title_bar("Weather App", "white", "#42526b")],
     [
         sg.Text(
             "Weather App",
@@ -65,12 +128,17 @@ layout = [
     ],
     [
         sg.Text("API Key", background_color="#666666", text_color="white"),
-        sg.InputText(apiKey, key="API_KEY"),
+        sg.InputText(apiKey, key="API_KEY", password_char="*"),
+        sg.Text(
+            "👁️",
+            key="SHOWKEY",
+            enable_events=True,
+        ),
     ],
     [sg.Button("Save")],
     [
         sg.Text("City", background_color="#666666", text_color="white"),
-        sg.InputText("City, Country", key="-LOCATION-"),
+        sg.InputText(get_location(), key="-LOCATION-"),
     ],
     [sg.Radio("Fahrenheit", "TEMP", default=True), sg.Radio("Celsius", "TEMP")],
     [sg.Button("Get Weather"), sg.Button("Get 3-Day Forecast")],
@@ -82,30 +150,53 @@ layout = [
         )
     ],
     [sg.Text("Favorites", background_color="#666666", text_color="white")],
-    [sg.Multiline(size=(35, 20), key="-WEATHER-")],
-    [sg.Listbox(values=["boston ma", "new york ny"], size=(30, 4), key="FAVORITES")],
-    [sg.Button("Add Favorite Location"), sg.Button("Load Favorite Locations")],
+    [sg.Multiline(size=(50, 8), key="-WEATHER-", no_scrollbar=True)],
+    [
+        sg.Listbox(
+            values=["boston ma", "new york ny"],
+            size=(30, 4),
+            key="FAVORITES",
+            enable_events=True,
+        )
+    ],
+    [
+        sg.Button("Add Favorite Location", key="SAVELOCATION"),
+        sg.Button("Load Favorite Locations", key="LOAD"),
+    ],
 ]
 
 
 # Create the window
-window = sg.Window("BobJr Weather App", layout)
+window = sg.Window(
+    "BobJr Weather App",
+    layout,
+    finalize=True,
+    transparent_color=sg.theme_background_color(),
+    grab_anywhere=True,
+    no_titlebar=True,
+)
+window.keep_on_top_set()
+window["-C-"].expand(True, False, False)
 
 
 def main():
-    window.read(timeout=0)
-    location = get_location()
-    window["-LOCATION-"].update(location)
+    event, values = window.read(timeout=0)
+    window["-WEATHER-"].update(get_weather(values["-LOCATION-"]))
     while True:
         event, values = window.read()
         print(event, values)
-        if event == sg.WINDOW_CLOSED:
+        if event == "Exit" or event == sg.WIN_CLOSED:
             break
-        if event == "Fetch Weather":
+        if event == "Get Weather":
             location = values["-LOCATION-"]
 
             result = get_weather(location)
             window["-WEATHER-"].update(result)
+        if event == "FAVORITES":
+            window["-WEATHER-"].update(get_weather(values["FAVORITES"][0]))
+        if event == "SHOWKEY":
+            print(window["SHOWKEY"].get())
+            window["API_KEY"].update(password_char="")
 
     window.close()
 
