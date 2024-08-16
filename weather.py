@@ -1,15 +1,26 @@
 import requests
 from dotenv import load_dotenv
 import os
+import sys
 
 load_dotenv()
-apiKey = os.getenv("API_KEY")
+api_key = os.getenv("API_KEY")
 
 
-def get_weather(location, measure="f"):
+def resource_path(relative_path):
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+
+    return os.path.join(base_path, relative_path)
+
+
+def get_weather(location, measure="f", APIKEY=None):
     response = requests.get(
-        f"http://api.weatherapi.com/v1/current.json?key={apiKey}&q={location}"
+        f"http://api.weatherapi.com/v1/current.json?key={APIKEY}&q={location}"
     )
+
     if response.status_code == 200:
         weather_data = response.json()
         weather_info = (
@@ -20,12 +31,12 @@ def get_weather(location, measure="f"):
         )
         return weather_info
     else:
-        return "Error fetching weather stuff"
+        return "Error, provide API Key"
 
 
-def get_forecast(location, measure="f", days="3"):
+def get_forecast(location, measure="f", days="3", APIKEY=None):
     response = requests.get(
-        f"http://api.weatherapi.com/v1/forecast.json?key={apiKey}&q={location}&days="
+        f"http://api.weatherapi.com/v1/forecast.json?key={APIKEY}&q={location}&days="
         + days
     )
     if response.status_code == 200:
@@ -40,18 +51,18 @@ def get_forecast(location, measure="f", days="3"):
             )
         return forecast_info
     else:
-        return "Error fetching forecast stuff"
+        return "Error, provide API Key"
 
 
 def get_saved_locations():
-    with open("locations.txt", "r") as file:
+    with open(resource_path("locations.txt"), "r") as file:
         locations = file.readlines()
         file.close()
     return locations
 
 
 def save_location(location):
-    with open("locations.txt", "a") as file:
+    with open(resource_path("locations.txt"), "a") as file:
         file.write(location + "\n")
         file.close()
 

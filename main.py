@@ -1,14 +1,22 @@
 import PySimpleGUI as sg
 import requests
+from PIL import Image, ImageEnhance
+import io
+import sys
+import os
 from weather import (
     get_weather,
     get_forecast,
-    apiKey,
+    api_key,
     get_saved_locations,
     save_location,
+    resource_path,
 )
 
 sg.Window._move_all_windows = True
+
+
+# For pyinstaller
 
 
 # FROM PYSIMPLEGUI DOCS
@@ -64,9 +72,19 @@ def get_location():
         return "Error fetching location stuff"
 
 
+def darken_image(path):
+    path = resource_path(path)
+    bg_image = Image.open(path)
+    enhancer = ImageEnhance.Brightness(bg_image)
+    bg_image = enhancer.enhance(0.5).resize((660, 470))
+    img_bytes = io.BytesIO()
+    bg_image.save(img_bytes, format="PNG")
+    return img_bytes.getvalue()
+
+
 bg = [
     [
-        sg.Image(filename="sun.png", key="-IMAGE-", size=(700, 450)),
+        sg.Image(data=darken_image("sun.png"), key="-IMAGE-"),
     ],
 ]
 window_background = sg.Window(
@@ -81,28 +99,28 @@ window_background = sg.Window(
 
 
 layout = [
-    [title_bar("Weather App", "white", "#42526b")],
+    [title_bar("Untitled", "black", "white")],
     [
         sg.Text(
             "Weather App",
-            font=("Arial", 20),
-            background_color="#666666",
+            font=("Roboto", 20),
             text_color="white",
         ),
-        sg.Button("Dark Mode", button_color=("white", "#666666"), key="THEME"),
     ],
     [
-        sg.Text("API Key", background_color="#666666", text_color="white"),
-        sg.InputText(apiKey, key="API_KEY", password_char="*"),
+        sg.Text("API Key", text_color="white"),
+        sg.InputText(api_key, key="API_KEY", password_char="*"),
         sg.Text(
             "👁️",
             key="SHOWKEY",
             enable_events=True,
         ),
     ],
-    [sg.Button("Save")],
+    [sg.Button("Save key")],
     [
-        sg.Text("City", background_color="#666666", text_color="white"),
+        sg.Text(
+            "City", text_color="white", background_color=sg.theme_background_color()
+        ),
         sg.InputText(get_location(), key="-LOCATION-"),
     ],
     [
@@ -120,8 +138,9 @@ layout = [
             key="-WEATHER-",
             no_scrollbar=True,
             expand_x=True,
-            # background_color=sg.theme_background_color(),
-            # text_color="white",
+            background_color=sg.theme_background_color(),
+            text_color="white",
+            font=("Roboto", 12),
         )
     ],
     [
@@ -133,6 +152,9 @@ layout = [
             expand_x=True,
             sbar_width=1,
             sbar_arrow_width=1,
+            background_color=sg.theme_background_color(),
+            text_color="white",
+            font=("Roboto", 12),
         )
     ],
     [
@@ -155,7 +177,7 @@ window.keep_on_top_set()
 window["-C-"].expand(True, False, False)
 
 
-def main():
+def main(apiKey):
     event, values = window.read(timeout=0)
     window["-WEATHER-"].update(get_weather(values["-LOCATION-"]))
     measure = "f"
@@ -170,14 +192,25 @@ def main():
             measure = "c"
         if event == "Get Weather":
             location = values["-LOCATION-"]
-            result = get_weather(location, measure)
+            result = get_weather(location, measure, APIKEY=values["API_KEY"])
             window["-WEATHER-"].update(result)
+            if "rain" in result.lower():
+                window_background["-IMAGE-"].update(data=darken_image("rain.png"))
+            elif "cloud" in result.lower():
+                window_background["-IMAGE-"].update(data=darken_image("cloud.png"))
+            elif "sun" in result.lower():
+                window_background["-IMAGE-"].update(data=darken_image("sun.png"))
+            elif "snow" in result.lower():
+                window_background["-IMAGE-"].update(data=darken_image("snow.png"))
+
         if event == "Get Forecast":
             location = values["-LOCATION-"]
-            result = get_forecast(location, measure, values["DAYS"])
+            result = get_forecast(location, measure, values["DAYS"], values["API_KEY"])
             window["-WEATHER-"].update(result)
         if event == "FAVORITES":
-            window["-WEATHER-"].update(get_weather(values["FAVORITES"][0]))
+            window["-WEATHER-"].update(
+                get_weather(values["FAVORITES"][0], APIKEY=values["API_KEY"])
+            )
             window["-LOCATION-"].update(values["FAVORITES"][0])
         if event == "SHOWKEY":
             print(window["SHOWKEY"].get())
@@ -187,9 +220,13 @@ def main():
             window["FAVORITES"].update(get_saved_locations())
         if event == "LOAD":
             window["FAVORITES"].update(get_saved_locations())
+        if event == "Save key":
+            apiKey = values["API_KEY"]
+            with open(".env", "w") as file:
+                file.write(f"API_KEY={apiKey}\n")
 
     window.close()
 
 
 if __name__ == "__main__":
-    main()
+    main(api_key)
